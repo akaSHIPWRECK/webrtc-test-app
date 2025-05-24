@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Stream Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/hotkeys-js@3.12.0/dist/hotkeys.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Game Stream Viewer</h1>
+            <span id="version">v1.0</span>
+        </header>
+        <div class="main-content">
+            <div class="connection-panel">
+                <div class="server-connection">
+                    <h2>Server Connection</h2>
+                    <div class="input-group">
+                        <input id="serverUrlInput" type="text" value="ws://well-martguerita-krida-zone-f2a5909f.koyeb.app/ws" placeholder="WebSocket URL">
+                    </div>
+                    <div class="button-group">
+                        <button id="connectBtn" class="primary-btn">Connect</button>
+                        <button id="disconnectBtn" class="secondary-btn" disabled>Disconnect</button>
+                    </div>
+                    <div class="status-indicator">
+                        <div class="connection-status">
+                            <span class="status-label">Status:</span>
+                            <span id="connectionStatus" class="status-value disconnected">Disconnected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="content-panels">
+                <div class="video-panel">
+                    <h2>Game Stream</h2>
+                    <div class="video-container">
+                        <video id="remoteVideo" autoplay playsinline></video>
+                        <div id="videoStatus" class="video-status">No stream available</div>
+                    </div>
+                    <div class="media-controls">
+                        <button id="fullscreenBtn" class="media-btn" disabled>Fullscreen</button>
+                        <button id="micBtn" class="media-btn">Mic</button>
+                    </div>
+                    <div class="stats-toggle-row">
+                        <button id="statsToggleBtn" class="stats-toggle-btn">Show Stats</button>
+                    </div>
+                    <div id="statsPanel" class="stats-panel">
+                        <div class="stat-item"><span>Latency:</span> <span id="statLatency">N/A</span></div>
+                        <div class="stat-item"><span>Resolution:</span> <span id="statResolution">N/A</span></div>
+                        <div class="stat-item"><span>FPS:</span> <span id="statFps">N/A</span></div>
+                    </div>
+                </div>
+                <div class="log-panel">
+                    <h2>Event Log</h2>
+                    <div class="log-controls">
+                        <button id="clearLogBtn" class="test-btn">Clear Log</button>
+                        <label>
+                            <input id="autoScrollCheck" type="checkbox" checked>
+                            Auto-scroll
+                        </label>
+                    </div>
+                    <div id="messageLog" class="message-log">
+                        <pre>Logging initialized...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="webrtc-client.js"></script>
+</body>
+</html>
