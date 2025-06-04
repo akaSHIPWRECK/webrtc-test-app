@@ -270,6 +270,26 @@ function createPeerConnection() {
         peerConnection.ontrack = event => {
             remoteStream = event.streams[0];
             elements.remoteVideo.srcObject = remoteStream;
+            // Debug: Log all tracks in the remote stream
+            console.log('Remote stream tracks:', remoteStream.getTracks());
+            // Log audio tracks specifically
+            const audioTracks = remoteStream.getAudioTracks();
+            if (audioTracks.length === 0) {
+                console.warn('No audio tracks found in remote stream!');
+            } else {
+                audioTracks.forEach((track, idx) => {
+                    console.log(`Audio track ${idx}: enabled=${track.enabled}, id=${track.id}, kind=${track.kind}`);
+                });
+            }
+            // Log video tracks as well
+            const videoTracks = remoteStream.getVideoTracks();
+            if (videoTracks.length === 0) {
+                console.warn('No video tracks found in remote stream!');
+            } else {
+                videoTracks.forEach((track, idx) => {
+                    console.log(`Video track ${idx}: enabled=${track.enabled}, id=${track.id}, kind=${track.kind}`);
+                });
+            }
             updateVideoControls(true);
             updateVideoStatus('');
             if (showStats) startStatsInterval();
