@@ -140,7 +140,7 @@ function init() {
     attachEventListeners();
     log('Game Streaming Viewer Initialized');
     // Set version in UI for cache-busting/debugging
-    const version = 'v1.0.2';
+    const version = 'v1.0.3';
     const versionElem = document.getElementById('version');
     if (versionElem) versionElem.textContent = version;
     elements.statsPanel.style.display = 'none';
@@ -393,9 +393,18 @@ function createPeerConnection() {
         peerConnection.ondatachannel = (event) => {
             if (event.channel && event.channel.label === 'input') {
                 dataChannel = event.channel;
-                dataChannel.onopen = () => log('DataChannel open', 'success');
-                dataChannel.onerror = e => log('DataChannel error: ' + e.message, 'error');
-                dataChannel.onclose = () => log('DataChannel closed', 'warning');
+                dataChannel.onopen = () => {
+                    log('DataChannel open', 'success');
+                    logInput('DataChannel open');
+                };
+                dataChannel.onerror = e => {
+                    log('DataChannel error: ' + e.message, 'error');
+                    logInput('DataChannel error: ' + e.message);
+                };
+                dataChannel.onclose = () => {
+                    log('DataChannel closed', 'warning');
+                    logInput('DataChannel closed');
+                };
             }
         };
         // If acting as the offerer, create the channel if not already present
