@@ -140,7 +140,7 @@ function init() {
     attachEventListeners();
     log('Game Streaming Viewer Initialized');
     // Set version in UI for cache-busting/debugging
-    const version = 'v1.0.1';
+    const version = 'v1.0.2';
     const versionElem = document.getElementById('version');
     if (versionElem) versionElem.textContent = version;
     elements.statsPanel.style.display = 'none';
@@ -388,11 +388,23 @@ function handleIceCandidate(message) {
 function createPeerConnection() {
     try {
         peerConnection = new RTCPeerConnection(iceServers);
-        // DataChannel for input events
-        dataChannel = peerConnection.createDataChannel('input');
-        dataChannel.onopen = () => log('DataChannel open', 'success');
-        dataChannel.onerror = e => log('DataChannel error: ' + e.message, 'error');
-        dataChannel.onclose = () => log('DataChannel closed', 'warning');
+        // Use existing data channel with label 'input' if available
+        dataChannel = null;
+        peerConnection.ondatachannel = (event) => {
+            if (event.channel && event.channel.label === 'input') {
+                dataChannel = event.channel;
+                dataChannel.onopen = () => log('DataChannel open', 'success');
+                dataChannel.onerror = e => log('DataChannel error: ' + e.message, 'error');
+                dataChannel.onclose = () => log('DataChannel closed', 'warning');
+            }
+        };
+        // If acting as the offerer, create the channel if not already present
+        if (!dataChannel) {
+            dataChannel = peerConnection.createDataChannel('input');
+            dataChannel.onopen = () => log('DataChannel open', 'success');
+            dataChannel.onerror = e => log('DataChannel error: ' + e.message, 'error');
+            dataChannel.onclose = () => log('DataChannel closed', 'warning');
+        }
         peerConnection.onicecandidate = event => {
             if (event.candidate) {
                 sendToServer({
