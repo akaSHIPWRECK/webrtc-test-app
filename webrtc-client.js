@@ -35,7 +35,105 @@ const elements = {
     clearLogBtn: document.getElementById('clearLogBtn'),
     messageLog: document.getElementById('messageLog').querySelector('pre'),
     autoScrollCheck: document.getElementById('autoScrollCheck'),
+    inputLog: document.getElementById('inputLog').querySelector('pre'),
+    inputBinaryLog: document.getElementById('inputBinaryLog').querySelector('pre'),
 };
+
+// --- Input Event Binary Protocol Constants ---
+const INPUT_EVENT_TYPE = {
+    KEYBOARD: 0,
+    MOUSE_MOVE: 1,
+    MOUSE_BUTTON: 2,
+    MOUSE_WHEEL: 3,
+    GAMEPAD: 4 // for future
+};
+let inputSequenceNumber = 0;
+const inputPageLoadTime = performance.now();
+function getInputTimestampMs() {
+    return Math.floor(performance.now() - inputPageLoadTime);
+}
+
+function encodeKeyboardEvent(e, keyState) {
+    // keyState: 0=up, 1=down
+    const buffer = new ArrayBuffer(16);
+    const dv = new DataView(buffer);
+    dv.setUint32(0, inputSequenceNumber++, true); // sequence_number
+    dv.setUint32(4, getInputTimestampMs(), true); // timestamp_ms
+    dv.setUint8(8, INPUT_EVENT_TYPE.KEYBOARD);    // type
+    dv.setUint8(9, e.keyCode & 0xFF);            // keyboard.key_code (Windows VK code)
+    dv.setUint8(10, keyState);                   // keyboard.key_state
+    // rest is padding/unused
+    return buffer;
+}
+
+function getScaledVideoCoordinates(e, videoElem) {
+    // Get bounding rect and mouse position relative to element
+    const rect = videoElem.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    // Get actual video resolution
+    const vw = videoElem.videoWidth || rect.width;
+    const vh = videoElem.videoHeight || rect.height;
+    // Get displayed size
+    const dw = rect.width;
+    const dh = rect.height;
+    // Scale coordinates to video resolution
+    const sx = Math.round((x / dw) * vw);
+    const sy = Math.round((y / dh) * vh);
+    return { x: sx, y: sy };
+}
+
+function encodeMouseMoveEvent(e) {
+    const v = elements.remoteVideo;
+    const coords = getScaledVideoCoordinates(e, v);
+    const buffer = new ArrayBuffer(16);
+    const dv = new DataView(buffer);
+    dv.setUint32(0, inputSequenceNumber++, true);
+    dv.setUint32(4, getInputTimestampMs(), true);
+    dv.setUint8(8, INPUT_EVENT_TYPE.MOUSE_MOVE);
+    dv.setInt16(9, coords.x, true);
+    dv.setInt16(11, coords.y, true);
+    // button/button_state/wheel_delta = 0
+    return buffer;
+}
+
+function encodeMouseButtonEvent(e, buttonState) {
+    const v = elements.remoteVideo;
+    const coords = getScaledVideoCoordinates(e, v);
+    const buffer = new ArrayBuffer(16);
+    const dv = new DataView(buffer);
+    dv.setUint32(0, inputSequenceNumber++, true);
+    dv.setUint32(4, getInputTimestampMs(), true);
+    dv.setUint8(8, INPUT_EVENT_TYPE.MOUSE_BUTTON);
+    dv.setInt16(9, coords.x, true);
+    dv.setInt16(11, coords.y, true);
+    dv.setUint8(13, e.button & 0xFF);      // mouse.button
+    dv.setUint8(14, buttonState);          // mouse.button_state
+    // wheel_delta = 0
+    return buffer;
+}
+
+function encodeMouseWheelEvent(e) {
+    const v = elements.remoteVideo;
+    const coords = getScaledVideoCoordinates(e, v);
+    const buffer = new ArrayBuffer(16);
+    const dv = new DataView(buffer);
+    dv.setUint32(0, inputSequenceNumber++, true);
+    dv.setUint32(4, getInputTimestampMs(), true);
+    dv.setUint8(8, INPUT_EVENT_TYPE.MOUSE_WHEEL);
+    dv.setInt16(9, coords.x, true);
+    dv.setInt16(11, coords.y, true);
+    // button/button_state = 0
+    dv.setInt16(15, Math.round(e.deltaY), true); // mouse.wheel_delta (at offset 15)
+    return buffer;
+}
+
+function sendInputEvent(buffer) {
+    logInputBinary(buffer); // Show binary data in UI
+    if (dataChannel && dataChannel.readyState === 'open') {
+        dataChannel.send(buffer);
+    }
+}
 
 // Initialize the application
 function init() {
@@ -72,52 +170,84 @@ function attachEventListeners() {
     setupVideoInputListeners();
 }
 
+// Log input events to the input log panel
+function logInput(message) {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    const currentLog = elements.inputLog.textContent;
+    elements.inputLog.textContent = currentLog + '\n' + logEntry;
+    // Always scroll input log to bottom
+    const logContainer = elements.inputLog.parentElement;
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+// Log input binary data to the input binary log panel
+function logInputBinary(buffer) {
+    const timestamp = new Date().toLocaleTimeString();
+    const arr = new Uint8Array(buffer);
+    const hex = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join(' ');
+    const logEntry = `[${timestamp}] ${hex}`;
+    const currentLog = elements.inputBinaryLog.textContent;
+    elements.inputBinaryLog.textContent = currentLog + '\n' + logEntry;
+    // Always scroll input binary log to bottom
+    const logContainer = elements.inputBinaryLog.parentElement;
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
 function setupVideoInputListeners() {
     const video = elements.remoteVideo;
     let isActive = false;
 
-    // Keyboard input using hotkeys-js
-    hotkeys('*', { element: video }, function(event, handler) {
-        if (!isActive || !dataChannel || dataChannel.readyState !== 'open') return;
-        const payload = {
-            type: event.type,
-            key: event.key,
-            code: event.code,
-            altKey: event.altKey,
-            ctrlKey: event.ctrlKey,
-            shiftKey: event.shiftKey,
-            metaKey: event.metaKey
-        };
-        log('[Input] Keyboard event sent: ' + JSON.stringify(payload), 'info');
-        dataChannel.send(JSON.stringify(payload));
+    // Remove previous listeners if any (optional, for hot reload)
+    video.replaceWith(video.cloneNode(true));
+    elements.remoteVideo = document.getElementById('remoteVideo');
+    const v = elements.remoteVideo;
+
+    // Keyboard input (focus required)
+    v.addEventListener('keydown', (e) => {
+        if (!isActive || e.repeat) return;
+        sendInputEvent(encodeKeyboardEvent(e, 1));
+        logInput(`Keyboard DOWN: keyCode=${e.keyCode}`);
+        e.preventDefault();
+    });
+    v.addEventListener('keyup', (e) => {
+        if (!isActive) return;
+        sendInputEvent(encodeKeyboardEvent(e, 0));
+        logInput(`Keyboard UP: keyCode=${e.keyCode}`);
+        e.preventDefault();
     });
 
-    // Mouse input
-    ['mousedown', 'mouseup', 'mousemove', 'wheel', 'click', 'dblclick', 'contextmenu'].forEach(type => {
-        video.addEventListener(type, function(e) {
-            if (!isActive || !dataChannel || dataChannel.readyState !== 'open') return;
-            let payload = { type: e.type };
-            if (e.type.startsWith('mouse') || e.type === 'mousemove' || e.type === 'click' || e.type === 'dblclick' || e.type === 'contextmenu') {
-                payload.button = e.button;
-                payload.buttons = e.buttons;
-                payload.x = e.offsetX;
-                payload.y = e.offsetY;
-            } else if (e.type === 'wheel') {
-                payload.deltaX = e.deltaX;
-                payload.deltaY = e.deltaY;
-            }
-            log('[Input] Mouse event sent: ' + JSON.stringify(payload), 'info');
-            dataChannel.send(JSON.stringify(payload));
-        });
+    // Mouse move
+    v.addEventListener('mousemove', (e) => {
+        if (!isActive) return;
+        sendInputEvent(encodeMouseMoveEvent(e));
+    });
+    // Mouse button
+    v.addEventListener('mousedown', (e) => {
+        if (!isActive) return;
+        sendInputEvent(encodeMouseButtonEvent(e, 1));
+        logInput(`Mouse DOWN: button=${e.button}`);
+    });
+    v.addEventListener('mouseup', (e) => {
+        if (!isActive) return;
+        sendInputEvent(encodeMouseButtonEvent(e, 0));
+        logInput(`Mouse UP: button=${e.button}`);
+    });
+    // Mouse wheel
+    v.addEventListener('wheel', (e) => {
+        if (!isActive) return;
+        sendInputEvent(encodeMouseWheelEvent(e));
+        logInput(`Mouse WHEEL: deltaY=${e.deltaY}`);
+        e.preventDefault();
     });
 
     // Focus/hover logic
-    video.addEventListener('mouseenter', () => { isActive = true; video.focus(); });
-    video.addEventListener('mouseleave', () => { isActive = false; });
-    video.addEventListener('focus', () => { isActive = true; });
-    video.addEventListener('blur', () => { isActive = false; });
+    v.addEventListener('mouseenter', () => { isActive = true; v.focus(); });
+    v.addEventListener('mouseleave', () => { isActive = false; });
+    v.addEventListener('focus', () => { isActive = true; });
+    v.addEventListener('blur', () => { isActive = false; });
     // Make video focusable
-    video.setAttribute('tabindex', '0');
+    v.setAttribute('tabindex', '0');
 }
 
 // Connect to WebSocket server
