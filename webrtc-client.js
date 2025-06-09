@@ -131,7 +131,15 @@ function encodeMouseWheelEvent(e) {
 function sendInputEvent(buffer) {
     logInputBinary(buffer); // Show binary data in UI
     if (dataChannel && dataChannel.readyState === 'open') {
-        dataChannel.send(buffer);
+        try {
+            dataChannel.send(buffer);
+            logInput('Sent input event (' + buffer.byteLength + ' bytes)');
+        } catch (err) {
+            logInput('Failed to send input event: ' + err.message);
+            log('Failed to send input event: ' + err.message, 'error');
+        }
+    } else {
+        logInput('DataChannel not open, input not sent');
     }
 }
 
