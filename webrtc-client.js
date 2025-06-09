@@ -148,7 +148,7 @@ function init() {
     attachEventListeners();
     log('Game Streaming Viewer Initialized');
     // Set version in UI for cache-busting/debugging
-    const version = 'v1.0.3';
+    const version = 'v1.0.4';
     const versionElem = document.getElementById('version');
     if (versionElem) versionElem.textContent = version;
     elements.statsPanel.style.display = 'none';
